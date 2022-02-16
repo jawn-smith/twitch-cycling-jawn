@@ -1,0 +1,49 @@
+name: cycling-streamjawn
+version: '0.1'
+summary: A package for streaming bicycle rides to Twitch
+description: |
+  A snap to use the Raspberry Pi camera and a GPS hat to stream bicycle
+  rides to Twitch with live info about speed, power, and heart rate
+
+grade: devel
+confinement: strict
+base: core20
+
+architectures:
+  - build-on: armhf
+    run-on: armhf
+
+apps:
+  pistream-bikejawn:
+    daemon: simple
+    command: bin/sensor_data
+    plugs:
+      - serial-port
+      - opengl
+      - camera
+      - network
+      - network-bind
+
+parts:
+  pistream-bikejawn:
+    plugin: python
+    source: .
+    build-packages:
+      - python3-wheel
+      - python3-dev
+    build-environment:
+      - PYTHONPATH: "$SNAPCRAFT_PART_INSTALL/usr/lib/python3/dist-packages"
+    python-packages:
+      - adafruit-circuitpython-gps
+      - board
+      - bleak
+      - pygeodesy
+    stage-packages:
+      - ffmpeg
+      - python3-wheel
+      - libpulse0
+      - fonts-ubuntu
+    override-build: |
+      snapcraftctl build
+      cp twitch-stream $SNAPCRAFT_PART_INSTALL/bin
+

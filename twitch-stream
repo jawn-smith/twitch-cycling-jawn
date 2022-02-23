@@ -8,8 +8,8 @@ THREADS="2" # max 6
 CBR="1000k" # constant bitrate (should be between 1000k - 3000k)
 QUALITY="ultrafast"  # one of the many FFMPEG preset
 AUDIO_RATE="44100"
-STREAM_KEY="$1" # use the terminal command Streaming streamkeyhere to stream your video to twitch or justin
-SERVER="live-sjc" # twitch server in California, see https://bashtech.net/twitch/ingest.php to change 
+STREAM_KEY="$1"
+SERVER="live-sjc"
      
 ffmpeg -f video4linux2 -s "$INRES" -r "$FPS" -i /dev/video0 -f lavfi \
   -i anullsrc=channel_layout=stereo:sample_rate=44100 -f flv -ac 2 -ar $AUDIO_RATE \

@@ -23,6 +23,11 @@ apps:
       - camera
       - network
       - network-bind
+      - bluetooth
+  configjawn:
+    command: bin/sensor_config
+    plugs:
+      - bluetooth
 
 parts:
   pistream-bikejawn:

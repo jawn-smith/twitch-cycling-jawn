@@ -6,32 +6,27 @@ import serial
 import adafruit_gps
 import pickle
 import asyncio
-import threading
+from typing import List
 from subprocess import Popen
-from bleak import discover
-from bleak import BleakClient
+from bleak import BleakClient, BleakScanner
+from bleak.backends.device import BLEDevice
 from pygeodesy.latlonBase import LatLonBase
 
 KNOTS_MPH_CONVERSION = 1.150779
-HEART_RATE_SERVICE_UUID = "0000180d"
-POWER_SERVICE_UUID = "00001818"
-HEART_RATE_CHARACTERISTIC_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
-POWER_CHARACTERISTIC_UUID = "00002a63-0000-1000-8000-00805f9b34fb"
 #SNAP_DATA = os.getenv('SNAP_DATA')
 SNAP_DATA = "."
 
-file_mutex = threading.Lock()
-
 class SensorReads:
-
     def __init__(self):
-        self.loop = asyncio.get_event_loop()
         self.data_file = "{}/data_write.txt".format(SNAP_DATA)
         self.ffmpeg_file = "{}/data_read.txt".format(SNAP_DATA)
         self.sensors_file = "{}/sensors.txt".format(SNAP_DATA)
-        self.speed = "No GPS Signal"
+        self.twitch_id_file = "{}/twitch-id.txt".format(SNAP_DATA)
         self.sensors = {}
-        self.sensor_data = {}
+        self.sensor_data = {
+            "speed": 0.0,
+            "distance": 0.0,
+        }
         self.heart_rate = None
         self.power = None
 
@@ -47,82 +42,101 @@ class SensorReads:
             self.OldLatLonInfo = LatLonBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
             self.sensor_data["distance"] = 0
 
-        # load the sensors
-        asyncio.ensure_future(self.sensor_load())
-        
-        # run the main loop
-        asyncio.ensure_future(self.run())
+        # connect to sensors and run the main loop
+        self.loop = asyncio.get_event_loop()
+        asyncio.gather(
+            self.sensor_load(),
+            self.run()
+        )
+        self.loop.run_forever()
 
-        loop = asyncio.get_event_loop()
-        loop.run_forever()
-
-
+    # sensor_load is the entry point for connecting to the BLE sensors
+    # 1. load the sensors file from disk
+    # 2. convert the sensors to a list of BLEDevice class instances
+    # 3. subscribe to the notifications from the sensors
     async def sensor_load(self):
-        # first check if there is a MAC address saved in sensors.txt
         try:
             with open(self.sensors_file, "rb") as sensor_file:
                 self.sensors = pickle.load(sensor_file)
-            if "heart_rate" in self.sensors:
-                self.hr_mac = self.sensors["heart_rate"]
-                # subscribe to the hr service
-                await self.subscribe_notify(self.hr_mac, HEART_RATE_CHARACTERISTIC_UUID, self.get_hr)
-            else:
-                # search for a heart rate monitor in a new thread
-                await self.sensor_search(HEART_RATE_SERVICE_UUID, "heart_rate", HEART_RATE_CHARACTERISTIC_UUID, self.get_hr)
-            if "power" in self.sensors:
-                self.power_mac = self.sensors["power"]
-                await self.subscribe_notify(self.hr_mac, POWER_CHARACTERISTIC_UUID, self.get_power)
-            else:
-                # search for a power meter in a new thread
-                await self.sensor_search(POWER_SERVICE_UUID, "power", POWER_CHARACTERISTIC_UUID, self.get_power)
         except (FileNotFoundError, TypeError):
-            # if the file doesn't exist, go ahead and search for all sensor types
-            await self.sensor_search(HEART_RATE_SERVICE_UUID, "heart_rate", HEART_RATE_CHARACTERISTIC_UUID, self.get_hr)
-            await self.sensor_search(POWER_SERVICE_UUID, "power", POWER_CHARACTERISTIC_UUID, self.get_power)
+            # if the file doesn't exist, just keep going without sensor data
+            pass
 
-    # search for a sensor with the given svc uuid, and if found, subscribe to notifications
-    # with the provided characteristic and notification handler
-    async def sensor_search(self, svc_uuid, name, char_uuid, notification_handler):
-        found = False
-        while not found:
-            devices = await discover()
-            for d in devices:
-                try:
-                    async with BleakClient(str(d.address)) as client:
-                        svcs = await client.get_services()
-                        service_iterator = svcs.__iter__()
-                        for service in service_iterator:
-                            if service.uuid.lower().startswith(svc_uuid):
-                                print("Found sensor {} with address {}".format(name, d.address))
-                                found = True
-                                self.sensors[name] = d.address
-                                self.write_sensors_file()
-                                break
+        addresses = [sensor["address"] for sensor in self.sensors]
+        characteristic_uuids = [sensor["characteristic_uuid"] for sensor in self.sensors]
+        notification_handlers = [
+            self.get_hr if sensor["name"] == "heart_rate" else self.get_power
+            for sensor in self.sensors
+        ]
+        await self.scan_for_devices(addresses)
+        asyncio.gather(
+            *(
+                self.connect_to_device(device,
+                    char_uuid,
+                    notif
+                )
+                for device, char_uuid, notif in zip(self.devices,
+                    characteristic_uuids,
+                    notification_handlers
+                )
+            )
+        )
+    
+    # in order to subscribe to notifications from multiple devices in parallel,
+    # bleak needs them to be in the form of BLEDevice class instances
+    async def scan_for_devices(self, addresses: List[str]) -> List[BLEDevice]:
+        addresses = [a.lower() for a in addresses]
+        s = BleakScanner()
+        print("Detecting devices...")
+        self.devices = [await s.find_device_by_address(address) for address in addresses]
+        for d in self.devices:
+            if d:
+                print(f"Detected {d}...")
+        if None in self.devices:
+            # We did not find all desired devices...
+            undetected_devices = list(
+                set(addresses).difference(
+                    list(
+                        filter(
+                            lambda x: x in [d.address.lower() for d in self.devices if d],
+                            addresses,
+                        )
+                    )
+                )
+            )
+            raise ValueError(
+                f"Could not find the following device(s): {undetected_devices}..."
+            )
+    
+    # subscribe to notifications from a device and sleep indefinitely
+    async def connect_to_device(self, address: BLEDevice, notification_uuid: str, callback):
+        print(f"Starting {address} loop...")
+        async with BleakClient(address, timeout=20.0) as client:
+            print(f"Connected to {address}...")
+            try:
+                await client.start_notify(notification_uuid, callback)
+                while True:
+                    # TODO: handle disconnects
+                    await asyncio.sleep(1.0)
+            except Exception as e:
+                print(e)
 
-                except Exception as e:
-                    pass
-        await self.subscribe_notify(self.sensors[name], char_uuid, notification_handler)
-
-    def write_sensors_file(self):
-        with file_mutex:
-            with open(self.sensors_file, "wb") as sensor_file:
-                pickle.dump(self.sensors, sensor_file, protocol=pickle.HIGHEST_PROTOCOL)
-
+    # format the data in a nice way for the video overlay
     def format_data(self):
-        data = str(self.speed) + " MPH "
-        data = str(self.sensor_data["distance"]) + " Miles"
-        if "heart_rate" in self.sensor_data:
-            data = data + " Heart Rate: " + self.sensor_data["heart_rate"] + " BPM"
-        if "power" in self.sensor_data:
-            data = data + " Power: " + self.sensor_data["power"] + " Watts"
-        return data
+        try:
+            data = f'{self.sensor_data["distance"]:.1f} miles  {self.sensor_data["speed"]:.1f} m/h'
+            if "heart_rate" in self.sensor_data:
+                data = data + f'  Heart Rate: {self.sensor_data["heart_rate"]} bpm'
+            if "power" in self.sensor_data:
+                data = data + f'  Power: {self.sensor_data["power"]} watts'
+            return data
+        except Exception as e:
+            print(e)
 
-    # ble heart rate service is done via a notify rather than a read.
+    # ble heart rate service is done via a notify/subscribe model
     # this function will serve as the notification handler and set the
-    # heart reate in self.sensor_data
-    async def get_hr(self, sender, data):
-        #TODO
-        """Simple notification handler which prints the data received."""
+    # heart rate in self.sensor_data
+    def get_hr(self, sender, data):
         byte0 = data[0]
         hrv_uint8 = (byte0 & 1) == 0
 
@@ -132,14 +146,15 @@ class SensorReads:
             hr = (data[2] << 8) | data[1]
         self.sensor_data["heart_rate"] = str(hr)
 
-    async def get_power(self, sender, data):
-        #TODO
-        self.sensor_data["power"] = "0"
-
-    async def subscribe_notify(self, address, char_uuid, notification_handler):
-        async with BleakClient(address) as client:
-            print(f"Connected: {client.is_connected}")
-            await client.start_notify(char_uuid, notification_handler)
+    # ble cycling power service is done via a notify/subscribe model
+    # this function will serve as the notification handler and set the
+    # heart rate in self.sensor_data
+    def get_power(self, sender, data):
+        lsb = data[2]
+        msb = data[3]
+        power = (msb<<8) | lsb
+        print("power: {} watts".format(power))
+        self.sensor_data["power"] = power
 
     async def update_data(self):
         # First get the speed
@@ -150,6 +165,7 @@ class SensorReads:
             pass
 
         self.get_mph()
+        self.calculate_distance()
 
         with open(self.data_file, "w") as data_file:
             data = self.format_data()
@@ -162,34 +178,39 @@ class SensorReads:
     # to the total distance travelled
     def calculate_distance(self):
         if self.gps.has_fix:
-            if not self.OldLatLonInfo:
-                self.OldLatLonInfo = LatLongBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
+            if not hasattr(self, "OldLatLonInfo"):
+                self.OldLatLonInfo = LatLonBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
             else:
-                self.LatLonInfo = LatLongBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
+                self.LatLonInfo = LatLonBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
                 self.sensor_data["distance"] += self.LatLonInfo.haversineTo(self.OldLatLonInfo)
                 self.OldLatLonInfo = self.LatLonInfo
 
+    # get the speed in mph if the GPS has a signal
     def get_mph(self):
-        if self.gps.has_fix:
-            self.speed = self.gps.speed_knots * KNOTS_MPH_CONVERSION
+        if self.gps.has_fix and self.gps.speed_knots is not None:
+            self.sensor_data["speed"] = self.gps.speed_knots * KNOTS_MPH_CONVERSION
         else:
-            self.speed = "No GPS Signal"
+            self.sensor_data["speed"] = 0.0
     
     async def run(self):
         # create a default subtitle
         with open(self.data_file,"w") as data_file:
             data_file.write("Loading Sensor Data...")
+
+        # load the user configured twitch stream ID
+        with open(self.twitch_id_file, "rb") as twitch_file:
+            twitch_id = twitch_file.readlines()
     
-        #ffmpeg = Popen(["bash", "twitch-stream"])
+        ffmpeg = Popen(["bash", "twitch-stream", twitch_id])
         try:
             while True:
                 await self.update_data()
-                # make sure ffmpeg is still running
-                #if ffmpeg.poll() is not None:
-                #    raise Exception("ffmpeg has stopped running")
+                 make sure ffmpeg is still running
+                if ffmpeg.poll() is not None:
+                    raise Exception("ffmpeg has stopped running")
                 await asyncio.sleep(0.5)
-        finally:
-            self.write_sensors_file()
+        except Exception as e:
+            print(e)
 
 
 if __name__ == "__main__":

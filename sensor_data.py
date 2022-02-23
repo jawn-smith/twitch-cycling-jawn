@@ -205,7 +205,7 @@ class SensorReads:
         try:
             while True:
                 await self.update_data()
-                 make sure ffmpeg is still running
+                # make sure ffmpeg is still running
                 if ffmpeg.poll() is not None:
                     raise Exception("ffmpeg has stopped running")
                 await asyncio.sleep(0.5)

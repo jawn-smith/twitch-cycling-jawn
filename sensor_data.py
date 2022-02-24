@@ -13,8 +13,7 @@ from bleak.backends.device import BLEDevice
 from pygeodesy.latlonBase import LatLonBase
 
 KNOTS_MPH_CONVERSION = 1.150779
-#SNAP_DATA = os.getenv('SNAP_DATA')
-SNAP_DATA = "."
+SNAP_DATA = os.getenv('SNAP_DATA')
 
 class SensorReads:
     def __init__(self):
@@ -213,5 +212,5 @@ class SensorReads:
             print(e)
 
 
-if __name__ == "__main__":
+def main():
     SensorReads()

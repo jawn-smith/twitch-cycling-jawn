@@ -1,4 +1,4 @@
-name: cycling-streamjawn
+name: twitch-cycling-jawn
 version: '0.1'
 summary: A package for streaming bicycle rides to Twitch
 description: |
@@ -14,7 +14,7 @@ architectures:
     run-on: armhf
 
 apps:
-  pistream-bikejawn:
+  stream-with-data:
     daemon: simple
     command: bin/sensor_data
     plugs:
@@ -23,14 +23,14 @@ apps:
       - camera
       - network
       - network-bind
-      - bluetooth
+      - bluez
   configjawn:
     command: bin/sensor_config
     plugs:
-      - bluetooth
+      - bluez
 
 parts:
-  pistream-bikejawn:
+  stream-with-data:
     plugin: python
     source: .
     build-packages:
@@ -48,7 +48,8 @@ parts:
       - python3-wheel
       - libpulse0
       - fonts-ubuntu
+    stage-snaps:
+      - bluez
     override-build: |
       snapcraftctl build
-      cp twitch-stream $SNAPCRAFT_PART_INSTALL/bin
-
+      cp $SNAPCRAFT_PROJECT_DIR/twitch-stream $SNAPCRAFT_PART_INSTALL/bin

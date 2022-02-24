@@ -18,8 +18,7 @@ POWER_BLE = {
     "characteristic_uuid": "00002a63-0000-1000-8000-00805f9b34fb",
 }
 
-#SNAP_DATA = os.getenv('SNAP_DATA')
-SNAP_DATA = "."
+SNAP_DATA = os.getenv('SNAP_DATA')
 
 class SensorSetup:
     def __init__(self, args):
@@ -84,11 +83,11 @@ class SensorSetup:
             with open(self.sensors_file, "wb") as sensor_file:
                 pickle.dump(self.sensors, sensor_file, protocol=pickle.HIGHEST_PROTOCOL)
         if self.twitch_id is not None:
-            with open(self.twitch_file, "wb") as twitch_file:
+            with open(self.twitch_id_file, "wb") as twitch_file:
                 pickle.dump(self.twitch_id, twitch_file, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='''Configure the sensors for use
         by the cycling twitch stream daemon.''')
     hr_group = parser.add_mutually_exclusive_group()

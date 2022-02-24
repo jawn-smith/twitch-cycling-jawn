@@ -12,6 +12,7 @@ from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
 from pygeodesy.latlonBase import LatLonBase
 
+METERS_MILES_CONVERSION = 1609.344
 KNOTS_MPH_CONVERSION = 1.150779
 SNAP_DATA = os.getenv('SNAP_DATA')
 
@@ -25,6 +26,7 @@ class SensorReads:
         self.sensor_data = {
             "speed": 0.0,
             "distance": 0.0,
+            "distance_meters": 0.0,
         }
         self.heart_rate = None
         self.power = None
@@ -181,7 +183,8 @@ class SensorReads:
                 self.OldLatLonInfo = LatLonBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
             else:
                 self.LatLonInfo = LatLonBase(self.gps.latitude, self.gps.longitude, height=self.gps.altitude_m)
-                self.sensor_data["distance"] += self.LatLonInfo.haversineTo(self.OldLatLonInfo)
+                self.sensor_data["distance_meters"] += self.LatLonInfo.haversineTo(self.OldLatLonInfo)
+                self.sensor_data["distance"] = self.sensor_data["distance_meters"] / METERS_MILES_CONVERSION
                 self.OldLatLonInfo = self.LatLonInfo
 
     # get the speed in mph if the GPS has a signal

@@ -10,8 +10,8 @@ confinement: strict
 base: core20
 
 architectures:
-  - build-on: armhf
-    run-on: armhf
+  - build-on: [armhf, arm64]
+    run-on: [armhf, arm64]
 
 apps:
   stream-with-data:

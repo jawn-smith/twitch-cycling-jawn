@@ -83,8 +83,8 @@ class SensorSetup:
             with open(self.sensors_file, "wb") as sensor_file:
                 pickle.dump(self.sensors, sensor_file, protocol=pickle.HIGHEST_PROTOCOL)
         if self.twitch_id is not None:
-            with open(self.twitch_id_file, "wb") as twitch_file:
-                pickle.dump(self.twitch_id, twitch_file, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(self.twitch_id_file, "w") as twitch_file:
+                twitch_file.write(self.twitch_id)
 
 
 def main():

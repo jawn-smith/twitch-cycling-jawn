@@ -200,8 +200,8 @@ class SensorReads:
             data_file.write("Loading Sensor Data...")
 
         # load the user configured twitch stream ID
-        with open(self.twitch_id_file, "rb") as twitch_file:
-            twitch_id = twitch_file.readlines()
+        with open(self.twitch_id_file, "r") as twitch_file:
+            twitch_id = twitch_file.read()
     
         ffmpeg = Popen(["bash", "twitch-stream", twitch_id])
         try:

@@ -31,6 +31,9 @@ class SensorReads:
         self.heart_rate = None
         self.power = None
 
+        # attempt to turn on bluetooth module, ignoring errors
+        Popen(["bluetoothctl", "power", "on"])
+
         # set up the gps
         uart = serial.Serial("/dev/ttyS0", baudrate=9600, timeout=1)
         self.gps = adafruit_gps.GPS(uart, debug=False)  # Use UART/pyserial

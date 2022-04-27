@@ -28,8 +28,6 @@ class SensorReads:
             "distance": 0.0,
             "distance_meters": 0.0,
         }
-        self.heart_rate = None
-        self.power = None
 
         # attempt to turn on bluetooth module, ignoring errors
         Popen(["bluetoothctl", "power", "on"])
@@ -157,8 +155,7 @@ class SensorReads:
         lsb = data[2]
         msb = data[3]
         power = (msb<<8) | lsb
-        print("power: {} watts".format(power))
-        self.sensor_data["power"] = power
+        self.sensor_data["power"] = str(power)
 
     async def update_data(self):
         # First get the speed
@@ -173,7 +170,6 @@ class SensorReads:
 
         with open(self.data_file, "w") as data_file:
             data = self.format_data()
-            print(data)
             data_file.write(data)
         # atomically update the file
         os.rename(self.data_file, self.ffmpeg_file)

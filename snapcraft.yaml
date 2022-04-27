@@ -5,7 +5,7 @@ description: |
   A snap to use the Raspberry Pi camera and a GPS hat to stream bicycle
   rides to Twitch with live info about speed, power, and heart rate
 
-grade: devel
+grade: stable
 confinement: strict
 base: core20
 

@@ -15,4 +15,4 @@ ffmpeg -f video4linux2 -s "$INRES" -r "$FPS" -i /dev/video0 -f lavfi \
   -i anullsrc=channel_layout=stereo:sample_rate=44100 -f flv -ac 2 -ar $AUDIO_RATE \
   -vcodec libx264 -g $GOP -keyint_min $GOPMIN -b:v $CBR -minrate $CBR -maxrate $CBR -pix_fmt yuv420p\
   -s $OUTRES -preset $QUALITY -tune film -acodec libmp3lame -threads $THREADS -strict normal \
-  -bufsize $CBR -vf "drawtext=fontfile=${SNAP}/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf:textfile=$SNAP_DATA/data_read.txt:reload=1:fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=(h-text_h)" -shortest "rtmp://$SERVER.twitch.tv/app/$STREAM_KEY"
+  -bufsize $CBR -vf "vidstabtransform,unsharp=5:5:0.8:3:3:0.4, drawtext=fontfile=${SNAP}/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf:textfile=$SNAP_DATA/data_read.txt:reload=1:fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=(h-text_h)" -shortest "rtmp://$SERVER.twitch.tv/app/$STREAM_KEY"
